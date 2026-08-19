@@ -1,8 +1,14 @@
+import pandas as pd
+
 from src.preprocessing.patients import preprocess_patients
 
 
 def test_preprocess_patients():
-    df = preprocess_patients("data/raw/csv/patients.csv")
+    df = pd.DataFrame({
+        " ID ": [1],
+        " First ": ["John"],
+    })
 
-    assert len(df) == 1163
-    assert all(col == col.lower() for col in df.columns)
+    result = preprocess_patients(df)
+
+    assert list(result.columns) == ["id", "first"]
