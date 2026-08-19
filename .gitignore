@@ -1,0 +1,49 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data files
+data/raw/*
+data/parquet/*
+
+# Airflow
+logs/
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Astro / local secrets
+.env
+airflow_settings.yaml
+
+# personal practice
+python_practice/
+Untitled*.ipynb
+patient.json
+
+# Astro local files
+.astro/

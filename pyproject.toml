@@ -1,0 +1,9 @@
+[project]
+name = "patient360-analytics"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=3.0.5",
+    "pyarrow>=25.0.1",
+    "requests>=2.34.2",
+]
