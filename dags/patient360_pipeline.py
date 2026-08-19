@@ -91,7 +91,18 @@ with DAG(
         print(f"FHIR files processed: {len(all_observations)}")
         print(f"Lab observations: {len(result)}")
         print(f"Abnormal observations: {result['is_abnormal'].sum()}")
-       
 
+        output_key = "processed/fhir/lab_observations.csv"
+
+        s3.load_string(
+            string_data=result.to_csv(index=False),
+            key=output_key,
+            bucket_name=BUCKET,
+            replace=True,
+        )
+
+        print(f"Output written to s3://{BUCKET}/{output_key}")
+        
+       
     wait_for_file >> process_patients()
     wait_for_fhir >> process_fhir()
