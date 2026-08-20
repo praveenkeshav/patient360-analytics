@@ -11,10 +11,16 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 
 from src.preprocessing.patient_preprocessing import preprocess_patients
+from src.preprocessing.encounter_preprocessing import preprocess_encounters
+from src.preprocessing.condition_preprocessing import preprocess_conditions
 from src.preprocessing.fhir_parser import (
     parse_fhir_bundle,
     classify_lab_abnormality,
 )
+
+from src.validation.patient_validation import validate_patients
+from src.validation.encounter_validation import validate_encounters
+from src.validation.condition_validation import validate_conditions
 from src.validation.lab_validation import validate_labs
 
 
@@ -29,6 +35,13 @@ logger = logging.getLogger(__name__)
 BUCKET = "p360-healthcare-raw"
 
 PATIENTS_KEY = "ehr/patients.csv"
+ENCOUNTERS_KEY = "ehr/encounters.csv"
+CONDITIONS_KEY = "ehr/conditions.csv"
+
+PATIENTS_PROCESSED_KEY = "processed/ehr/patients.csv"
+ENCOUNTERS_PROCESSED_KEY = "processed/ehr/encounters.parquet"
+CONDITIONS_PROCESSED_KEY = "processed/ehr/conditions.csv"
+
 FHIR_PREFIX = "fhir/"
 
 LAB_REFERENCE_PATH = "data/raw/reference/lab_reference_ranges.csv"
@@ -78,6 +91,26 @@ with DAG(
         timeout=300,
     )
 
+    # Wait until encounters.csv is available in S3.
+    wait_for_encounters = S3KeySensor(
+        task_id="wait_for_encounters",
+        bucket_name=BUCKET,
+        bucket_key=ENCOUNTERS_KEY,
+        aws_conn_id="aws_patient360",
+        poke_interval=30,
+        timeout=300,
+    )
+
+    # Wait until conditions.csv is available in S3.
+    wait_for_conditions = S3KeySensor(
+        task_id="wait_for_conditions",
+        bucket_name=BUCKET,
+        bucket_key=CONDITIONS_KEY,
+        aws_conn_id="aws_patient360",
+        poke_interval=30,
+        timeout=300,
+    )
+
     # Wait until FHIR JSON files are available in S3.
     wait_for_fhir = S3KeySensor(
         task_id="wait_for_fhir",
@@ -111,9 +144,29 @@ with DAG(
             StringIO(content)
         )
 
-        # Apply our Python preprocessing logic.
+        # Apply the reusable patient preprocessing function.
+        # This standardizes column names, parses dates, and creates is_deceased.
         patients = preprocess_patients(patients)
 
+        # Validate the processed patient data.
+        # The validation checks patient IDs, birthdates, and date logic.
+        validate_patients(patients)
+
+        logger.info(
+            "Patients validation passed."
+        )
+
+
+        # Write the processed DataFrame to CSV and save it to S3.
+        # This creates the file that will later be loaded into Snowflake RAW.
+        s3.load_string(
+            string_data=patients.to_csv(index=False),
+            key=PATIENTS_PROCESSED_KEY,
+            bucket_name=BUCKET,
+            replace=True,
+        )
+
+        # Get the number of processed patients for reporting.
         patient_count = len(patients)
 
         logger.info(
@@ -121,10 +174,208 @@ with DAG(
             patient_count,
         )
 
-        # Return only a small value through XCom.
+        # Log the S3 location of the processed patient file.
+        logger.info(
+            "Processed patient output: s3://%s/%s",
+            BUCKET,
+            PATIENTS_PROCESSED_KEY,
+        )
+
+        # Return only the row count through XCom.
         # We do not pass the DataFrame through XCom.
         return patient_count
 
+
+    # -----------------------------------------------------
+    # Encounter processing
+    # -----------------------------------------------------
+
+    @task
+    def process_encounters():
+
+        # Connect to S3 using our Airflow AWS connection.
+        s3 = S3Hook(aws_conn_id="aws_patient360")
+
+        # Read encounters.csv from S3.
+        content = s3.read_key(
+            key=ENCOUNTERS_KEY,
+            bucket_name=BUCKET,
+        )
+
+        # Convert the S3 file into a DataFrame.
+        encounters = pd.read_csv(
+            StringIO(content)
+        )
+
+        # Read patients.csv to validate patient references.
+        patient_content = s3.read_key(
+            key=PATIENTS_KEY,
+            bucket_name=BUCKET,
+        )
+
+        patients = pd.read_csv(
+            StringIO(patient_content)
+        )
+
+        # Create a set of valid patient IDs.
+        patient_ids = set(
+            patients["Id"]
+        )
+
+        # Apply encounter preprocessing.
+        # This standardizes columns, parses dates,
+        # and calculates length_of_stay_days.
+        encounters = preprocess_encounters(
+            encounters
+        )
+
+        # Validate the processed encounter data.
+        # This checks IDs, dates, and patient references.
+        validate_encounters(
+            encounters,
+            patient_ids,
+        )
+
+        logger.info(
+            "Encounter validation passed."
+        )
+
+        # Write the processed DataFrame as Parquet.
+        # Parquet gives us hands-on practice with a columnar format.
+        with tempfile.NamedTemporaryFile(
+            suffix=".parquet"
+        ) as temp_file:
+
+            encounters.to_parquet(
+                temp_file.name,
+                index=False,
+            )
+
+            # Upload the Parquet file to S3.
+            s3.load_file(
+                filename=temp_file.name,
+                key=ENCOUNTERS_PROCESSED_KEY,
+                bucket_name=BUCKET,
+                replace=True,
+            )
+
+        # Get the number of processed encounters.
+        encounter_count = len(encounters)
+
+        logger.info(
+            "Encounters processed: %s",
+            encounter_count,
+        )
+
+        # Log the processed S3 location.
+        logger.info(
+            "Processed encounter output: s3://%s/%s",
+            BUCKET,
+            ENCOUNTERS_PROCESSED_KEY,
+        )
+
+        # Return only the count through XCom.
+        return encounter_count
+
+
+
+    # -----------------------------------------------------
+    # Condition processing
+    # -----------------------------------------------------
+
+    @task
+    def process_conditions():
+
+        # Connect to S3 using our Airflow AWS connection.
+        s3 = S3Hook(aws_conn_id="aws_patient360")
+
+        # Read conditions.csv from S3.
+        content = s3.read_key(
+            key=CONDITIONS_KEY,
+            bucket_name=BUCKET,
+        )
+
+        # Convert the S3 file into a DataFrame.
+        conditions = pd.read_csv(
+            StringIO(content)
+        )
+
+        # Read patients.csv to validate patient references.
+        patient_content = s3.read_key(
+            key=PATIENTS_KEY,
+            bucket_name=BUCKET,
+        )
+
+        patients = pd.read_csv(
+            StringIO(patient_content)
+        )
+
+        # Create a set of valid patient IDs.
+        patient_ids = set(
+            patients["Id"]
+        )
+
+        # Read encounters.csv to validate encounter references.
+        encounter_content = s3.read_key(
+            key=ENCOUNTERS_KEY,
+            bucket_name=BUCKET,
+        )
+
+        encounters = pd.read_csv(
+            StringIO(encounter_content)
+        )
+
+        # Create a set of valid encounter IDs.
+        encounter_ids = set(
+            encounters["Id"]
+        )
+
+        # Apply the reusable Conditions preprocessing function.
+        # This standardizes column names, parses dates,
+        # and calculates condition duration.
+        conditions = preprocess_conditions(
+            conditions
+        )
+
+        # Validate the processed Conditions data.
+        # This checks dates, patient references,
+        # encounter references, and condition codes.
+        validate_conditions(
+            conditions,
+            patient_ids,
+            encounter_ids,
+        )
+
+        logger.info(
+            "Condition validation passed."
+        )
+
+        # Write the processed Conditions DataFrame to CSV.
+        # This file will later be loaded into Snowflake RAW.
+        s3.load_string(
+            string_data=conditions.to_csv(index=False),
+            key=CONDITIONS_PROCESSED_KEY,
+            bucket_name=BUCKET,
+            replace=True,
+        )
+
+        # Get the number of processed conditions.
+        condition_count = len(conditions)
+
+        logger.info(
+            "Conditions processed: %s",
+            condition_count,
+        )
+
+        # Log the processed S3 location.
+        logger.info(
+            "Processed condition output: s3://%s/%s",
+            BUCKET,
+            CONDITIONS_PROCESSED_KEY,
+        )
+
+        # Return only the count through XCom.
+        return condition_count
 
     # -----------------------------------------------------
     # FHIR laboratory processing
@@ -250,6 +501,8 @@ with DAG(
     @task
     def report_counts(
         patient_count,
+        encounter_count,
+        condition_count,
         lab_count,
     ):
 
@@ -264,14 +517,48 @@ with DAG(
         )
 
         logger.info(
+        "Encounters processed: %s",
+        encounter_count,
+
+        )
+
+        logger.info(
+        "Conditions processed: %s",
+        condition_count,
+
+        )
+
+        logger.info(
             "Lab observations processed: %s",
             lab_count,
         )
 
         logger.info(
-            "Processed output: s3://%s/%s",
+        "Processed patient output: s3://%s/%s",
+        BUCKET,
+        PATIENTS_PROCESSED_KEY,
+
+        )
+
+        logger.info(
+        "Processed encounter output: s3://%s/%s",
+        BUCKET,
+        ENCOUNTERS_PROCESSED_KEY,
+
+        )
+
+        logger.info(
+        "Processed condition output: s3://%s/%s",
+        BUCKET,
+        CONDITIONS_PROCESSED_KEY,
+
+        )
+
+        logger.info(
+            "Processed lab output: s3://%s/%s",
             BUCKET,
             LAB_OUTPUT_KEY,
+
         )
 
 
@@ -280,15 +567,20 @@ with DAG(
     # -----------------------------------------------------
 
     patient_count = process_patients()
-
+    encounter_count = process_encounters()
+    condition_count = process_conditions()
     lab_count = process_fhir_labs()
 
     # The summary runs after both processing tasks succeed.
     report_counts(
         patient_count,
+        encounter_count,
+        condition_count,
         lab_count,
     )
 
     # Each sensor controls its corresponding processing task.
     wait_for_patients >> patient_count
+    wait_for_encounters >> encounter_count
+    wait_for_conditions >> condition_count
     wait_for_fhir >> lab_count
