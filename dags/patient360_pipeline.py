@@ -6,9 +6,10 @@ import tempfile
 import pandas as pd
 
 from airflow import DAG
-from airflow.decorators import task
+from airflow.sdk import task, task_group
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator, SQLCheckOperator
 
 from src.preprocessing.patient_preprocessing import preprocess_patients
 from src.preprocessing.encounter_preprocessing import preprocess_encounters
@@ -75,6 +76,7 @@ with DAG(
 
     catchup=False,
     default_args=default_args,
+    template_searchpath="/usr/local/airflow/include",
 ) as dag:
 
     # -----------------------------------------------------
@@ -121,7 +123,6 @@ with DAG(
         poke_interval=30,
         timeout=300,
     )
-
 
     # -----------------------------------------------------
     # Patient processing
@@ -184,7 +185,6 @@ with DAG(
         # Return only the row count through XCom.
         # We do not pass the DataFrame through XCom.
         return patient_count
-
 
     # -----------------------------------------------------
     # Encounter processing
@@ -276,8 +276,6 @@ with DAG(
 
         # Return only the count through XCom.
         return encounter_count
-
-
 
     # -----------------------------------------------------
     # Condition processing
@@ -561,6 +559,167 @@ with DAG(
 
         )
 
+    # -----------------------------------------------------
+    # Snowflake tasks
+    # -----------------------------------------------------
+
+    create_raw_load_audit = SQLExecuteQueryOperator(
+        task_id="create_raw_load_audit",
+        conn_id="snowflake_patient360",
+        sql="sql/snowflake/create_raw_load_audit.sql",
+    )
+    
+    @task_group(group_id="raw_patients_load")
+    def raw_patients_load():
+
+        create_raw_patients = SQLExecuteQueryOperator(
+            task_id="create_raw_patients",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/create_raw_patients.sql",
+        )
+
+        load_raw_patients = SQLExecuteQueryOperator(
+            task_id="load_raw_patients",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/load_raw_patients.sql",
+        )
+
+        validate_raw_patients = SQLCheckOperator(
+            task_id="validate_raw_patients",
+            conn_id="snowflake_patient360",
+            sql="""
+                SELECT
+                    COUNT(*) >= 1000
+                    AND COUNT(*) = COUNT(ID)
+                    AND COUNT(*) = COUNT(DISTINCT ID)
+                    AND COUNT_IF(BIRTHDATE > CURRENT_DATE) = 0
+                FROM PATIENT360_PROD.EHR_RAW.RAW_PATIENTS
+            """,
+        )
+
+        log_load_audit = SQLExecuteQueryOperator(
+            task_id="log_load_audit",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/insert_raw_load_audit.sql",
+            params={
+                "table_name": "RAW_PATIENTS",
+                "source_file": "patients.csv",
+                "raw_table": "PATIENT360_PROD.EHR_RAW.RAW_PATIENTS",
+            },
+        )
+
+        create_raw_patients >> load_raw_patients
+        load_raw_patients >> validate_raw_patients
+        validate_raw_patients >> log_load_audit
+
+    @task_group(group_id="raw_encounters_load")
+    def raw_encounters_load():
+
+        create_raw_encounters = SQLExecuteQueryOperator(
+            task_id="create_raw_encounters",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/create_raw_encounters.sql",
+        )
+
+        load_raw_encounters = SQLExecuteQueryOperator(
+            task_id="load_raw_encounters",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/load_raw_encounters.sql",
+        )
+
+        validate_raw_encounters = SQLCheckOperator(
+            task_id="validate_raw_encounters",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/validate_raw_encounters.sql",
+        )
+
+        log_load_audit = SQLExecuteQueryOperator(
+            task_id="log_load_audit",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/insert_raw_load_audit.sql",
+            params={
+                "table_name": "RAW_ENCOUNTERS",
+                "source_file": "encounters.parquet",
+                "raw_table": "PATIENT360_PROD.EHR_RAW.RAW_ENCOUNTERS",
+            },
+        )
+
+        create_raw_encounters >> load_raw_encounters
+        load_raw_encounters >> validate_raw_encounters
+        validate_raw_encounters >> log_load_audit
+
+    @task_group(group_id="raw_conditions_load")
+    def raw_conditions_load():
+
+        create_raw_conditions = SQLExecuteQueryOperator(
+            task_id="create_raw_conditions",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/create_raw_conditions.sql",
+        )
+
+        load_raw_conditions = SQLExecuteQueryOperator(
+            task_id="load_raw_conditions",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/load_raw_conditions.sql",
+        )
+
+        validate_raw_conditions = SQLCheckOperator(
+            task_id="validate_raw_conditions",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/validate_raw_conditions.sql",
+        )
+
+        log_load_audit = SQLExecuteQueryOperator(
+            task_id="log_load_audit",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/insert_raw_load_audit.sql",
+            params={
+                "table_name": "RAW_CONDITIONS",
+                "source_file": "conditions.csv",
+                "raw_table": "PATIENT360_PROD.EHR_RAW.RAW_CONDITIONS",
+            },
+        )
+
+        create_raw_conditions >> load_raw_conditions
+        load_raw_conditions >> validate_raw_conditions
+        validate_raw_conditions >> log_load_audit    
+
+
+    @task_group(group_id="raw_labs_load")
+    def raw_labs_load():
+
+        create_raw_labs = SQLExecuteQueryOperator(
+            task_id="create_raw_labs",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/create_raw_labs.sql",
+        )
+
+        load_raw_labs = SQLExecuteQueryOperator(
+            task_id="load_raw_labs",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/load_raw_labs.sql",
+        )
+
+        validate_raw_labs = SQLCheckOperator(
+            task_id="validate_raw_labs",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/validate_raw_labs.sql",
+        )
+
+        log_load_audit = SQLExecuteQueryOperator(
+            task_id="log_load_audit",
+            conn_id="snowflake_patient360",
+            sql="sql/snowflake/insert_raw_load_audit.sql",
+            params={
+                "table_name": "RAW_LABS",
+                "source_file": "lab_observations.csv",
+                "raw_table": "PATIENT360_PROD.EHR_RAW.RAW_LABS",
+            },
+        )
+
+        create_raw_labs >> load_raw_labs
+        load_raw_labs >> validate_raw_labs
+        validate_raw_labs >> log_load_audit
 
     # -----------------------------------------------------
     # Task dependencies
@@ -584,3 +743,17 @@ with DAG(
     wait_for_encounters >> encounter_count
     wait_for_conditions >> condition_count
     wait_for_fhir >> lab_count
+    
+    raw_patients_load_group = raw_patients_load()
+    raw_encounters_load_group = raw_encounters_load()
+    raw_conditions_load_group = raw_conditions_load()
+    raw_labs_load_group = raw_labs_load()
+
+    patient_count >> create_raw_load_audit
+    create_raw_load_audit >> raw_patients_load_group
+
+    encounter_count >> raw_encounters_load_group
+    condition_count >> raw_conditions_load_group
+    lab_count >> raw_labs_load_group
+    
+    
