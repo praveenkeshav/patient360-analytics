@@ -730,30 +730,66 @@ with DAG(
     condition_count = process_conditions()
     lab_count = process_fhir_labs()
 
-    # The summary runs after both processing tasks succeed.
-    report_counts(
+    # ------------------------------------------------------
+    # Source data dependencies
+    # ------------------------------------------------------
+
+    # Patients processing requires patients source data.
+    wait_for_patients >> patient_count
+
+    # Encounters processing requires both patients and encounters.
+    wait_for_patients >> encounter_count
+    wait_for_encounters >> encounter_count
+
+    # Conditions processing requires patients and encounters
+    wait_for_patients >> condition_count
+    wait_for_encounters >> condition_count
+    wait_for_conditions >> condition_count
+
+    # FHIR Labs processing requires patients and FHIR data.
+    wait_for_patients >> lab_count
+    wait_for_fhir >> lab_count
+
+    # -----------------------------------------------------
+    # Create RAW audit table before any RAW load starts.
+    # -----------------------------------------------------
+
+    raw_patients_load_group = raw_patients_load()
+    raw_encounters_load_group = raw_encounters_load()
+    raw_conditions_load_group = raw_conditions_load()
+    raw_labs_load_group = raw_labs_load()
+
+    create_raw_load_audit >> raw_patients_load_group
+    create_raw_load_audit >> raw_encounters_load_group
+    create_raw_load_audit >> raw_conditions_load_group
+    create_raw_load_audit >> raw_labs_load_group
+
+    # -----------------------------------------------------
+    # Processing must complete before corresponding RAW load
+    # -----------------------------------------------------
+
+    patient_count >> raw_patients_load_group
+    encounter_count >> raw_encounters_load_group
+    condition_count >> raw_conditions_load_group
+    lab_count >> raw_labs_load_group
+
+    # -----------------------------------------------------
+    # Final pipeline summary.
+    # -----------------------------------------------------
+
+    summary = report_counts(
         patient_count,
         encounter_count,
         condition_count,
         lab_count,
     )
 
-    # Each sensor controls its corresponding processing task.
-    wait_for_patients >> patient_count
-    wait_for_encounters >> encounter_count
-    wait_for_conditions >> condition_count
-    wait_for_fhir >> lab_count
-    
-    raw_patients_load_group = raw_patients_load()
-    raw_encounters_load_group = raw_encounters_load()
-    raw_conditions_load_group = raw_conditions_load()
-    raw_labs_load_group = raw_labs_load()
-
-    patient_count >> create_raw_load_audit
-    create_raw_load_audit >> raw_patients_load_group
-
-    encounter_count >> raw_encounters_load_group
-    condition_count >> raw_conditions_load_group
-    lab_count >> raw_labs_load_group
+    # Report completion only after all RAW load groups succeed.
+    [
+        raw_patients_load_group,
+        raw_encounters_load_group,
+        raw_conditions_load_group,
+        raw_labs_load_group,
+    ] >> summary
     
     
