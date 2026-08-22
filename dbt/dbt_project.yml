@@ -1,0 +1,31 @@
+name: 'patient360'
+version: '1.0.0'
+
+profile: 'patient360'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+# Configuring models
+
+models:
+  patient360:
+    staging:
+      +materialized: view
+      +schema: STAGING
+
+    intermediate:
+      +materialized: view
+      +schema: INTERMEDIATE
+
+    marts:
+      +materialized: table
+      +schema: MART

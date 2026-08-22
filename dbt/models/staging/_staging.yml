@@ -1,0 +1,87 @@
+models:
+  - name: stg_patients
+    description: "Cleaned and standardized patient records."
+
+    columns:
+      - name: patient_id
+        data_tests:
+          - not_null
+          - unique
+
+      - name: gender
+        data_tests:
+          - not_null
+
+  - name: stg_encounters
+    description: "Cleaned and standardized encounter records."
+
+    columns:
+      - name: encounter_id
+        data_tests:
+          - not_null
+          - unique
+
+      - name: patient_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+
+      - name: encounter_start
+        data_tests:
+          - not_null
+
+  - name: stg_conditions
+    description: "Cleaned and standardized patient condition records."
+
+    columns:
+      - name: patient_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+
+      - name: encounter_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_encounters')
+                field: encounter_id
+
+      - name: condition_code
+        data_tests:
+          - not_null
+
+      - name: condition_start_date
+        data_tests:
+          - not_null
+
+  - name: stg_labs
+    description: "Cleaned and standardized laboratory observation records."
+
+    columns:
+      - name: lab_id
+        data_tests:
+          - not_null
+          - unique
+
+      - name: patient_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_patients')
+                field: patient_id
+
+      - name: lab_datetime
+        data_tests:
+          - not_null
+
+      - name: labtest_name
+        data_tests:
+          - not_null
