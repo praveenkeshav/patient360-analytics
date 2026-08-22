@@ -1,0 +1,10 @@
+sources:
+  - name: ehr_raw
+    database: patient360_prod
+    schema: ehr_raw
+
+    tables:
+      - name: raw_patients
+      - name: raw_encounters
+      - name: raw_conditions
+      - name: raw_labs
