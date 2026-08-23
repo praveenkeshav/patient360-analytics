@@ -61,6 +61,6 @@ with DAG(
         ),
 
         operator_args={
-            "install_deps": True,
+            "install_deps": False,
         },
     )
