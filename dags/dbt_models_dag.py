@@ -56,9 +56,9 @@ with DAG(
                 "path:models/marts",
             ],
 
-        ),
+            test_behavior=TestBehavior.AFTER_EACH,
 
-        test_behavior=TestBehavior.AFTER_EACH,
+        ),
 
         operator_args={
             "install_deps": True,
