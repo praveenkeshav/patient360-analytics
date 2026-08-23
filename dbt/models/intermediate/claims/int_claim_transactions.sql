@@ -5,18 +5,20 @@ with source_data as (
 
 ),
 
-business_logic as (
+deduplicated as (
 
     select
         transaction_id,
         claim_id,
         patient_id,
-        amount,
-        transaction_start,
-        transaction_end,
-        appointment_id
+        amount
 
     from source_data
+
+    qualify row_number() over (
+        partition by transaction_id
+        order by transaction_id
+    ) = 1
 
 ),
 
@@ -27,15 +29,12 @@ final as (
         claim_id,
         patient_id,
         amount,
-        transaction_start,
-        transaction_end,
-        appointment_id,
 
         current_timestamp() as _loaded_at,
         '{{ invocation_id }}' as _dbt_invocation_id,
         'STAGING.STG_CLAIM_TRANSACTIONS' as _record_source
 
-    from business_logic
+    from deduplicated
 
 )
 

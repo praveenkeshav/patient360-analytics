@@ -1,0 +1,15 @@
+models:
+  - name: dim_patient
+    description: "Patient dimension supporting chronic condition prevalence analysis."
+
+    columns:
+      - name: patient_id
+        description: "Unique patient identifier."
+        data_tests:
+          - not_null
+          - unique
+
+      - name: birth_date
+        description: "Patient birth date."
+        data_tests:
+          - not_null

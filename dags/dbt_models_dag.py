@@ -53,6 +53,7 @@ with DAG(
             select=[
                 "path:models/staging",
                 "path:models/intermediate",
+                "path:models/marts",
             ],
 
         ),
