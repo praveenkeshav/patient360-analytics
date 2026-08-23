@@ -1,0 +1,31 @@
+models:
+  - name: fct_encounter
+    description: "Encounter-level fact table supporting readmission and length-of-stay analytics."
+
+    columns:
+
+      - name: encounter_id
+        description: "Unique identifier for the encounter."
+        data_tests:
+          - not_null
+          - unique
+
+      - name: patient_id
+        description: "Identifier of the patient associated with the encounter."
+        data_tests:
+          - not_null
+
+      - name: encounter_start
+        description: "Start timestamp of the encounter."
+        data_tests:
+          - not_null
+
+      - name: encounter_class
+        description: "Classification of the encounter."
+        data_tests:
+          - not_null
+
+      - name: is_30_day_readmission
+        description: "Indicates whether the encounter represents a 30-day readmission."
+        data_tests:
+          - not_null

@@ -8,3 +8,11 @@ sources:
       - name: raw_encounters
       - name: raw_conditions
       - name: raw_labs
+
+  - name: claims_raw
+    database: patient360_prod
+    schema: claims_raw
+
+    tables:
+      - name: raw_claims
+      - name: raw_claim_transactions 

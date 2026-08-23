@@ -1,0 +1,98 @@
+version: 2
+
+models:
+
+  - name: int_patient_encounters
+    description: "Intermediate encounter dataset used for LOS and readmission analytics."
+
+    columns:
+      - name: encounter_id
+        tests:
+          - not_null
+
+      - name: patient_id
+        tests:
+          - not_null
+
+      - name: encounter_start
+        tests:
+          - not_null
+
+      - name: encounter_end
+        tests:
+          - not_null
+
+      - name: length_of_stay_days
+        tests:
+          - not_null
+
+
+  - name: int_patient_labs
+    description: "Intermediate laboratory dataset used for lab abnormality analytics."
+
+    columns:
+      - name: lab_id
+        tests:
+          - not_null
+
+      - name: patient_id
+        tests:
+          - not_null
+
+      - name: lab_datetime
+        tests:
+          - not_null
+
+      - name: is_abnormal
+        tests:
+          - not_null
+
+
+  - name: int_patient_diagnoses
+    description: "Intermediate condition dataset used for chronic condition analytics."
+
+    columns:
+      - name: patient_id
+        tests:
+          - not_null
+
+      - name: condition_code
+        tests:
+          - not_null
+
+      - name: condition_start_date
+        tests:
+          - not_null
+
+  - name: int_claims
+    description: "Intermediate claims dataset used for claims analytics."
+
+    columns:
+      - name: claim_id
+        tests:
+          - not_null
+
+      - name: patient_id
+        tests:
+          - not_null
+
+      - name: service_date
+        tests:
+          - not_null
+
+
+  - name: int_claim_transactions
+    description: "Intermediate claim transaction dataset used for claims cost analytics."
+
+    columns:
+      - name: transaction_id
+        tests:
+          - not_null
+
+      - name: claim_id
+        tests:
+          - not_null
+
+      - name: patient_id
+        tests:
+          - not_null
