@@ -17,7 +17,7 @@ deduplicated as (
 
     qualify row_number() over (
         partition by transaction_id
-        order by transaction_id
+        order by transaction_start desc, transaction_end desc
     ) = 1
 
 ),
