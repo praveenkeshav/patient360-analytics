@@ -30,5 +30,29 @@ jobs:
       - name: run python tests
         run: python -m pytest
 
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'EOF'
+          patient360:
+            target: ci
+            outputs:
+              ci:
+                type: snowflake
+                account: WYAPDUI-FO24914
+                user: PRVNKSHV
+                password: "{{ env_var('DBT_SNOWFLAKE_PASSWORD') }}"
+                role: ACCOUNTADMIN
+                database: PATIENT360_DEV
+                schema: DEV
+                warehouse: COMPUTE_WH
+                threads: 4
+          EOF
+
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
       - name: dbt parse
-        run: dbt parse --project-dir ./dbt
+        run: dbt parse --project-dir ./dbt --target ci
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
