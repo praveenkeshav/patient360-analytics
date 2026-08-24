@@ -36,7 +36,7 @@ business_logic as (
         normal_low,
         normal_high,
 
-        coalesce(is_abnormal, false) as is_abnormal
+        is_abnormal
 
     from source_data
 

@@ -27,5 +27,3 @@ models:
 
       - name: is_abnormal
         description: "Indicates whether the laboratory result is outside the normal range."
-        data_tests:
-          - not_null
