@@ -22,7 +22,7 @@ models:
           - not_null
 
       - name: total_claim_cost
-        description: "Total transaction amount associated with the claim."
+        description: "Sum of transaction amounts associated with the claim."
         data_tests:
           - not_null
 
