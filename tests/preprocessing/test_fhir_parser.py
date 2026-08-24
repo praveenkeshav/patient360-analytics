@@ -10,12 +10,8 @@ from src.preprocessing.fhir_parser import (
 )
 
 
-# 3. Define one real FHIR file for the parser test
-FHIR_FILE = (
-    "data/raw/fhir/"
-    "Abdul218_Harris789_b0a06ead-cc42-aa48-dad6-841d4aa679fa.json"
-)
-
+# 3. Define one test FHIR fixture for the parser test
+FHIR_FILE = "tests/fixtures/fhir/sample_bundle.json"
 
 # 4. Test that the FHIR parser extracts laboratory observations
 def test_parse_fhir_bundle_returns_laboratory_observations():
@@ -40,8 +36,8 @@ def test_parse_fhir_bundle_returns_laboratory_observations():
 # 5. Test that all FHIR files can be parsed
 def test_parse_all_fhir_files():
 
-    # Arrange - use the complete local FHIR directory
-    folder = "data/raw/fhir"
+    # Arrange - use the test FHIR fixture directory
+    folder = "tests/fixtures/fhir"
 
     # Act - parse all FHIR files
     result = parse_all_fhir_files(folder)
