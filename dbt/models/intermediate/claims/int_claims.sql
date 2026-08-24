@@ -19,7 +19,11 @@ deduplicated as (
 
     qualify row_number() over (
         partition by claim_id
-        order by service_date
+        order by service_date,
+        current_illness_date desc,
+        last_billed_date_p desc,
+        last_billed_date_1 desc,
+        last_billed_date_2 desc
     ) = 1
 
 ),
