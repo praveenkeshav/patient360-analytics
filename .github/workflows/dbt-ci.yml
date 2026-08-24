@@ -56,3 +56,8 @@ jobs:
         run: dbt parse --project-dir ./dbt --target ci
         env:
           DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
+      - name: dbt build
+        run: dbt build --project-dir ./dbt --target ci
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}

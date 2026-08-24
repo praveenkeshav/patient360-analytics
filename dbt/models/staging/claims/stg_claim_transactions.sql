@@ -99,7 +99,7 @@ final as (
         patient_insurance_id,
         fee_schedule_id,
         provider_id,
-        supervising_provider_id
+        supervising_provider_id,
 
         current_timestamp() as _loaded_at,
         '{{ invocation_id }}' as _dbt_invocation_id,
