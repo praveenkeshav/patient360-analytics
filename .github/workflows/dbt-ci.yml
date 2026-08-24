@@ -18,11 +18,14 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@v4
       - name: Set up python
-        uses: actions/set-up-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
 
       - name: run python tests
         run: python -m pytest
