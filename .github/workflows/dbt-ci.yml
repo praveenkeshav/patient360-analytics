@@ -1,0 +1,58 @@
+name: dbt CI - Python and dbt validation
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  dbt-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: run python tests
+        run: python -m pytest
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'EOF'
+          patient360:
+            target: ci
+            outputs:
+              ci:
+                type: snowflake
+                account: WYAPDUI-FO24914
+                user: PRVNKSHV
+                password: "{{ env_var('DBT_SNOWFLAKE_PASSWORD') }}"
+                role: ACCOUNTADMIN
+                database: PATIENT360_DEV
+                schema: DEV
+                warehouse: COMPUTE_WH
+                threads: 4
+          EOF
+
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
+      - name: dbt parse
+        run: dbt parse --project-dir ./dbt --target ci
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
