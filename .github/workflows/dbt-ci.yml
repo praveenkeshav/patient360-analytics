@@ -1,4 +1,4 @@
-name: dbt CI
+name: dbt CI - Python and dbt validation
 
 on:
   push:
