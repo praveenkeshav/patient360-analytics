@@ -8,7 +8,7 @@ with source_data as(
 cleaned_data as (
 
     select
-        patient_id_broken as patient_id,
+        id as patient_id,
         birthdate as birth_date,
         deathdate as death_date,
         
