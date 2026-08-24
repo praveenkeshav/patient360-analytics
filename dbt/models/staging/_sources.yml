@@ -1,6 +1,6 @@
 sources:
   - name: ehr_raw
-    database: patient360_prod
+    database: "{{ target.database }}"
     schema: ehr_raw
 
     tables:
@@ -10,9 +10,9 @@ sources:
       - name: raw_labs
 
   - name: claims_raw
-    database: patient360_prod
+    database: "{{ target.database }}"
     schema: claims_raw
 
     tables:
       - name: raw_claims
-      - name: raw_claim_transactions 
+      - name: raw_claim_transactions
