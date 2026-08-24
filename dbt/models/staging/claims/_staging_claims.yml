@@ -1,0 +1,46 @@
+models:
+  - name: stg_claims
+    description: "Cleaned and standardized claims from the claims raw layer."
+
+    columns:
+      - name: claim_id
+        description: "Unique identifier for the claim."
+        data_tests:
+          - not_null
+
+      - name: patient_id
+        description: "Patient associated with the claim."
+        data_tests:
+          - not_null
+
+      - name: service_date
+        description: "Date on which the claim service occurred."
+        data_tests:
+          - not_null
+
+      - name: _loaded_at
+        data_tests:
+          - not_null
+
+      - name: _record_source
+        data_tests:
+          - not_null
+
+  - name: stg_claim_transactions
+    description: "Cleaned and standardized claim transaction records."
+
+    columns:
+      - name: transaction_id
+        description: "Unique identifier for the claim transaction."
+        data_tests:
+          - not_null
+
+      - name: claim_id
+        description: "Claim associated with the transaction."
+        data_tests:
+          - not_null
+
+      - name: patient_id
+        description: "Patient associated with the transaction."
+        data_tests:
+          - not_null

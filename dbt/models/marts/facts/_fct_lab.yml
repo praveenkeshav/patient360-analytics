@@ -1,0 +1,29 @@
+models:
+  - name: fct_lab
+    description: "Laboratory observation fact table supporting lab abnormality analytics."
+
+    columns:
+
+      - name: lab_id
+        description: "Unique identifier for the laboratory observation."
+        data_tests:
+          - not_null
+          - unique
+
+      - name: patient_id
+        description: "Identifier of the patient."
+        data_tests:
+          - not_null
+
+      - name: encounter_id
+        description: "Identifier of the associated encounter."
+        data_tests:
+          - not_null
+
+      - name: lab_datetime
+        description: "Date and time of the laboratory observation."
+        data_tests:
+          - not_null
+
+      - name: is_abnormal
+        description: "Indicates whether the laboratory result is outside the normal range."

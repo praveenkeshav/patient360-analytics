@@ -1,0 +1,32 @@
+models:
+
+  - name: fct_claim
+    description: "Claim-level fact table supporting claim cost and transaction analytics."
+
+    columns:
+
+      - name: claim_id
+        description: "Unique identifier for the claim."
+        data_tests:
+          - not_null
+          - unique
+
+      - name: patient_id
+        description: "Identifier of the patient associated with the claim."
+        data_tests:
+          - not_null
+
+      - name: service_date
+        description: "Date the claim service occurred."
+        data_tests:
+          - not_null
+
+      - name: total_claim_cost
+        description: "Sum of transaction amounts associated with the claim."
+        data_tests:
+          - not_null
+
+      - name: transaction_count
+        description: "Number of transactions associated with the claim."
+        data_tests:
+          - not_null

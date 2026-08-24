@@ -1,0 +1,24 @@
+models:
+  - name: fct_diagnosis
+    description: "Diagnosis fact supporting chronic condition prevalence analytics."
+
+    columns:
+      - name: patient_id
+        description: "Patient associated with the diagnosis."
+        data_tests:
+          - not_null
+
+      - name: condition_code
+        description: "Diagnosis condition code."
+        data_tests:
+          - not_null
+
+      - name: condition_start_date
+        description: "Condition start date."
+        data_tests:
+          - not_null
+
+      - name: is_chronic_condition
+        description: "Derived flag indicating a condition lasting at least 90 days."
+        data_tests:
+          - not_null
