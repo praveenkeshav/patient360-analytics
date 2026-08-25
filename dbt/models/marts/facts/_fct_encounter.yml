@@ -1,6 +1,11 @@
 models:
   - name: fct_encounter
     description: "Encounter-level fact table supporting readmission and length-of-stay analytics."
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "encounter_end is not null and encounter_start is not null and encounter_end >= encounter_start"
+
 
     columns:
 
