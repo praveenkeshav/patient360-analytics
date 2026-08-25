@@ -1,0 +1,58 @@
+name: dbt Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  dbt-production:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Configure dbt production profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'EOF'
+          patient360:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: WYAPDUI-FO24914
+                user: PRVNKSHV
+                password: "{{ env_var('DBT_SNOWFLAKE_PASSWORD') }}"
+                role: ACCOUNTADMIN
+                database: PATIENT360_PROD
+                schema: PROD
+                warehouse: COMPUTE_WH
+                threads: 4
+          EOF
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
+      - name: dbt deps
+        run: dbt deps --project-dir ./dbt
+
+      - name: dbt parse
+        run: dbt parse --project-dir ./dbt --target prod
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
+      - name: dbt build
+        run: dbt build --project-dir ./dbt --target prod
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
