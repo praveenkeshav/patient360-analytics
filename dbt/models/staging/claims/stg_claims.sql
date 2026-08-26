@@ -1,8 +1,5 @@
 {{ config(
-    materialized='incremental',
-    unique_key='claim_id',
-    incremental_strategy='merge',
-    on_schema_change='sync_all_columns'
+    materialized='table'
 ) }}
 
 with source_data as (
@@ -10,12 +7,17 @@ with source_data as (
     select *
     from {{ source('claims_raw', 'raw_claims') }}
 
-    {% if is_incremental() %}
-        where service_date >= (
-            select coalesce(dateadd(day, -1, max(service_date)), '1900-01-01'::date)
-            from {{ this }}
-        )
-    {% endif %}
+),
+
+deduplicated as (
+
+    select *
+    from source_data
+
+    qualify row_number() over (
+        partition by claim_id
+        order by _ingested_at desc
+    ) = 1
 
 ),
 
@@ -64,18 +66,21 @@ cleaned_data as (
         healthcare_claim_type_id_1,
         healthcare_claim_type_id_2
 
-    from source_data
+    from deduplicated
 
 ),
 
 final as (
 
     select
+
         claim_id,
         patient_id,
         provider_id,
+
         primary_insurance_id,
         secondary_insurance_id,
+
         department_id,
         patient_department_id,
 
