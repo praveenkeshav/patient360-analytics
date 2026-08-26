@@ -47,3 +47,5 @@ patient.json
 
 # Astro local files
 .astro/
+snowflake_rsa_key.p8
+snowflake_rsa_key.pub
