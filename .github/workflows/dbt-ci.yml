@@ -1,11 +1,10 @@
-name: dbt CI - Python and dbt validation
+name: dbt CI - Python and Slim CI validation
 
 on:
   push:
     branches:
       - main
       - "feature/**"
-
   pull_request:
     branches:
       - main
@@ -15,25 +14,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout repository
+      - name: Checkout repository with history
         uses: actions/checkout@v4
-      - name: Set up python
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: install dependencies
+      - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install pytest
 
-      - name: run python tests
+      - name: Run Python tests
         run: python -m pytest
 
       - name: Configure dbt profile
         run: |
           mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml <<'EOF'
+          cat > ~/.dbt/profiles.yml <<'EOF_PROFILE'
           patient360:
             target: ci
             outputs:
@@ -47,20 +49,50 @@ jobs:
                 schema: DEV
                 warehouse: COMPUTE_WH
                 threads: 4
-          EOF
-
+          EOF_PROFILE
         env:
           DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
 
-      - name: dbt deps
+      - name: Install dbt packages
         run: dbt deps --project-dir ./dbt
 
-      - name: dbt parse
-        run: dbt parse --project-dir ./dbt --target ci
+      - name: Parse current dbt project
+        run: dbt parse --project-dir ./dbt --target ci --no-partial-parse
         env:
           DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
 
-      - name: dbt build
+      - name: Fetch main branch for Slim CI state
+        if: github.event_name == 'pull_request'
+        run: git fetch origin main --no-tags --prune
+
+      - name: Build main branch dbt state manifest
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          rm -rf /tmp/patient360-main
+          git worktree add --detach /tmp/patient360-main origin/main
+          dbt deps --project-dir /tmp/patient360-main/dbt
+          dbt parse \
+            --project-dir /tmp/patient360-main/dbt \
+            --target ci \
+            --target-path /tmp/patient360-main/dbt/target \
+            --no-partial-parse
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
+      - name: Slim CI - build modified resources and descendants
+        if: github.event_name == 'pull_request'
+        run: |
+          dbt build \
+            --project-dir ./dbt \
+            --target ci \
+            --select state:modified+ \
+            --state /tmp/patient360-main/dbt/target
+        env:
+          DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}
+
+      - name: Full dbt validation for branch pushes
+        if: github.event_name != 'pull_request'
         run: dbt build --project-dir ./dbt --target ci
         env:
           DBT_SNOWFLAKE_PASSWORD: ${{ secrets.DBT_SNOWFLAKE_PASSWORD }}

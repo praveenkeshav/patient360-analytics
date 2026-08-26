@@ -1,7 +1,21 @@
+{{ config(
+    materialized='incremental',
+    unique_key='transaction_id',
+    incremental_strategy='merge',
+    on_schema_change='sync_all_columns'
+) }}
+
 with source_data as (
 
     select *
     from {{ source('claims_raw', 'raw_claim_transactions') }}
+
+    {% if is_incremental() %}
+        where transaction_start >= (
+            select coalesce(dateadd(day, -1, max(transaction_start)), '1900-01-01'::timestamp_ntz)
+            from {{ this }}
+        )
+    {% endif %}
 
 ),
 

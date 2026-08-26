@@ -2,8 +2,9 @@ with patients as (
 
     select
         patient_id,
-        birth_date,
         gender,
+        age,
+        age_group,
         race,
         ethnicity,
         is_deceased
@@ -14,7 +15,8 @@ with patients as (
 
 select
     patient_id,
-    birth_date,
+    age,
+    age_group,
     gender,
     race,
     ethnicity,
