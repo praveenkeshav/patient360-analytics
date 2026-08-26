@@ -5,23 +5,6 @@ with source_data as (
 
 ),
 
-deduplicated as (
-
-    select
-        transaction_id,
-        claim_id,
-        patient_id,
-        amount
-
-    from source_data
-
-    qualify row_number() over (
-        partition by transaction_id
-        order by transaction_start desc, transaction_end desc
-    ) = 1
-
-),
-
 final as (
 
     select
@@ -34,7 +17,7 @@ final as (
         '{{ invocation_id }}' as _dbt_invocation_id,
         'STAGING.STG_CLAIM_TRANSACTIONS' as _record_source
 
-    from deduplicated
+    from source_data
 
 )
 
