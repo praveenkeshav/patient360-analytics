@@ -1,7 +1,21 @@
+{{ config(
+    materialized='incremental',
+    unique_key='lab_id',
+    incremental_strategy='merge',
+    on_schema_change='sync_all_columns'
+) }}
+
 with source_data as (
 
     select *
     from {{ source('ehr_raw', 'raw_labs') }}
+
+    {% if is_incremental() %}
+        where "OBSERVATION_DATE" >= (
+            select coalesce(dateadd(day, -1, max(lab_datetime)), '1900-01-01'::timestamp_ntz)
+            from {{ this }}
+        )
+    {% endif %}
 
 ),
 

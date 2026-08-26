@@ -1,4 +1,4 @@
-with source_data as(
+with source_data as (
 
     select *
     from {{ source('ehr_raw', 'raw_patients') }}
@@ -11,7 +11,7 @@ cleaned_data as (
         id as patient_id,
         birthdate as birth_date,
         deathdate as death_date,
-        
+
         case
             when upper(trim(marital)) = 'M' then 'Married'
             when upper(trim(marital)) = 'S' then 'Single'
@@ -49,22 +49,54 @@ cleaned_data as (
 
         cast(zip as varchar) as zip,
 
-        lat,
-        lon,
-
         healthcare_expenses,
         healthcare_coverage,
 
         coalesce(is_deceased, false) as is_deceased
 
     from source_data
+
+),
+
+patient_with_age as (
+
+    select
+        *,
+        datediff(
+            year,
+            birth_date,
+            '2021-11-15'::date
+        )
+        -
+        case
+            when dateadd(
+                year,
+                datediff(year, birth_date, '2021-11-15'::date),
+                birth_date
+            ) > '2021-11-15'::date
+            then 1
+            else 0
+        end as age
+
+    from cleaned_data
+
 ),
 
 final as (
+
     select
         patient_id,
         birth_date,
         death_date,
+        age,
+
+        case
+            when age between 18 and 34 then '18-34'
+            when age between 35 and 64 then '35-64'
+            when age >= 65 then '65+'
+            else 'Under 18 / Unknown'
+        end as age_group,
+
         marital_status,
         gender,
         race,
@@ -74,8 +106,6 @@ final as (
         state,
         county,
         zip,
-        lat,
-        lon,
         healthcare_expenses,
         healthcare_coverage,
         is_deceased,
@@ -84,7 +114,8 @@ final as (
         '{{ invocation_id }}' as _dbt_invocation_id,
         'EHR_RAW.RAW_PATIENTS' as _record_source
 
-    from cleaned_data
+    from patient_with_age
+
 )
 
 select *

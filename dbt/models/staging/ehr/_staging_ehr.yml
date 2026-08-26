@@ -12,6 +12,21 @@ models:
         data_tests:
           - not_null
 
+      - name: age
+        data_tests:
+          - not_null
+
+      - name: age_group
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "18-34"
+                  - "35-64"
+                  - "65+"
+                  - "Under 18 / Unknown"
+
   - name: stg_encounters
     description: "Cleaned and standardized encounter records."
 

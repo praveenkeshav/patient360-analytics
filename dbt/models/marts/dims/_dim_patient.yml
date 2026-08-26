@@ -9,7 +9,7 @@ models:
           - not_null
           - unique
 
-      - name: birth_date
-        description: "Patient birth date."
+      - name: age
+        description: "Patient age."
         data_tests:
           - not_null

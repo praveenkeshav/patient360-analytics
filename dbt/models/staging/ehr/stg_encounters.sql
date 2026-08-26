@@ -1,7 +1,21 @@
+{{ config(
+    materialized='incremental',
+    unique_key='encounter_id',
+    incremental_strategy='merge',
+    on_schema_change='sync_all_columns'
+) }}
+
 with source_data as(
     select
      *
     from {{ source('ehr_raw', 'raw_encounters') }}
+
+    {% if is_incremental() %}
+        where to_timestamp_ntz("start", 9) >= (
+            select coalesce(dateadd(day, -1, max(encounter_start)), '1900-01-01'::timestamp_ntz)
+            from {{ this }}
+        )
+    {% endif %}
 ),
 
 cleaned_data as (

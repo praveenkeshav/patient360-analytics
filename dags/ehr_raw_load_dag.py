@@ -7,7 +7,6 @@ from airflow.providers.common.sql.operators.sql import (
     SQLCheckOperator,
 )
 
-
 # ---------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------
@@ -22,9 +21,10 @@ LABS_PROCESSED_KEY = "processed/fhir/lab_observations.csv"
 
 default_args = {
     "retries": 2,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=5),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": timedelta(minutes=20),
 }
-
 
 # ---------------------------------------------------------
 # DAG
@@ -33,10 +33,20 @@ default_args = {
 with DAG(
     dag_id="ehr_raw_load",
     start_date=datetime(2026, 8, 19),
-    schedule=None,
+    schedule="0 2 * * *",
     catchup=False,
+    max_active_runs=1,
+    dagrun_timeout=timedelta(hours=1),
     default_args=default_args,
     template_searchpath="/usr/local/airflow/include",
+    tags=["patient360", "ehr", "snowflake", "raw"],
+    doc_md="""
+    ### Patient 360 EHR RAW Load
+
+    Loads validated EHR/FHIR files from processed S3 into the Snowflake RAW layer.
+    The DAG is scheduled after the daily EHR ingestion window and validates each
+    RAW table before writing its audit record.
+    """,
 ) as dag:
 
     # -----------------------------------------------------
@@ -49,7 +59,8 @@ with DAG(
         bucket_key=PATIENTS_PROCESSED_KEY,
         aws_conn_id="aws_patient360",
         poke_interval=30,
-        timeout=300,
+        timeout=timedelta(minutes=30),
+        deferrable=True,
     )
 
     wait_for_encounters = S3KeySensor(
@@ -58,7 +69,8 @@ with DAG(
         bucket_key=ENCOUNTERS_PROCESSED_KEY,
         aws_conn_id="aws_patient360",
         poke_interval=30,
-        timeout=300,
+        timeout=timedelta(minutes=30),
+        deferrable=True,
     )
 
     wait_for_conditions = S3KeySensor(
@@ -67,7 +79,8 @@ with DAG(
         bucket_key=CONDITIONS_PROCESSED_KEY,
         aws_conn_id="aws_patient360",
         poke_interval=30,
-        timeout=300,
+        timeout=timedelta(minutes=30),
+        deferrable=True,
     )
 
     wait_for_labs = S3KeySensor(
@@ -76,7 +89,8 @@ with DAG(
         bucket_key=LABS_PROCESSED_KEY,
         aws_conn_id="aws_patient360",
         poke_interval=30,
-        timeout=300,
+        timeout=timedelta(minutes=30),
+        deferrable=True,
     )
 
     # -----------------------------------------------------

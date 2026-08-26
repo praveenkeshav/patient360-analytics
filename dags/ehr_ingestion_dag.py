@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from io import StringIO
+from pathlib import Path
 import logging
 import tempfile
 
@@ -52,8 +53,11 @@ LAB_OUTPUT_KEY = "processed/fhir/lab_observations.csv"
 # ---------------------------------------------------------
 
 default_args = {
+    "owner": "patient360",
     "retries": 2,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=5),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": timedelta(minutes=20)
 }
 
 
@@ -64,10 +68,20 @@ default_args = {
 with DAG(
     dag_id="ehr_ingestion",
     start_date=datetime(2026, 8, 19),
-    schedule=None,
+    schedule="0 1 * * *",
     catchup=False,
+    max_active_runs=1,
+    dagrun_timeout=timedelta(hours=1),
     default_args=default_args,
     template_searchpath="/usr/local/airflow/include",
+    tags=["patient360", "ehr", "production"],
+    doc_md="""
+    ## Patient 360 EHR ingestion
+
+    Runs daily after the expected source delivery window, validates EHR/FHIR
+    source data, and publishes processed datasets to the S3 landing zone.
+    """
+
 ) as dag:
 
     # -----------------------------------------------------
@@ -79,8 +93,9 @@ with DAG(
         bucket_name=BUCKET,
         bucket_key=PATIENTS_KEY,
         aws_conn_id="aws_patient360",
-        poke_interval=30,
-        timeout=300,
+        poke_interval=60,
+        timeout=1800,
+        deferrable=True,
     )
 
     wait_for_encounters = S3KeySensor(
@@ -88,8 +103,9 @@ with DAG(
         bucket_name=BUCKET,
         bucket_key=ENCOUNTERS_KEY,
         aws_conn_id="aws_patient360",
-        poke_interval=30,
-        timeout=300,
+        poke_interval=60,
+        timeout=1800,
+        deferrable=True,
     )
 
     wait_for_conditions = S3KeySensor(
@@ -97,8 +113,9 @@ with DAG(
         bucket_name=BUCKET,
         bucket_key=CONDITIONS_KEY,
         aws_conn_id="aws_patient360",
-        poke_interval=30,
-        timeout=300,
+        poke_interval=60,
+        timeout=1800,
+        deferrable=True,
     )
 
     wait_for_fhir = S3KeySensor(
@@ -107,8 +124,9 @@ with DAG(
         bucket_key="fhir/*.json",
         wildcard_match=True,
         aws_conn_id="aws_patient360",
-        poke_interval=30,
-        timeout=300,
+        poke_interval=60,
+        timeout=1800,
+        deferrable=True,
     )
 
     # -----------------------------------------------------
@@ -124,7 +142,6 @@ with DAG(
             key=PATIENTS_KEY,
             bucket_name=BUCKET,
         )
-
         patients = pd.read_csv(
             StringIO(content)
         )
@@ -160,7 +177,6 @@ with DAG(
             key=ENCOUNTERS_KEY,
             bucket_name=BUCKET,
         )
-
         encounters = pd.read_csv(
             StringIO(content)
         )
@@ -287,9 +303,11 @@ with DAG(
 
         s3 = S3Hook(aws_conn_id="aws_patient360")
 
-        reference_df = pd.read_csv(
-            LAB_REFERENCE_PATH
-        )
+        if not Path(LAB_REFERENCE_PATH).exists():
+            raise FileNotFoundError(
+                f"Lab reference file not found: {LAB_REFERENCE_PATH}"
+            )
+        reference_df = pd.read_csv(LAB_REFERENCE_PATH)
 
         patient_content = s3.read_key(
             key=PATIENTS_KEY,
@@ -307,7 +325,7 @@ with DAG(
         keys = s3.list_keys(
             bucket_name=BUCKET,
             prefix=FHIR_PREFIX,
-        )
+        ) or []
 
         observations = []
 

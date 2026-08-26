@@ -1,7 +1,21 @@
+{{ config(
+    materialized='incremental',
+    unique_key='claim_id',
+    incremental_strategy='merge',
+    on_schema_change='sync_all_columns'
+) }}
+
 with source_data as (
 
     select *
     from {{ source('claims_raw', 'raw_claims') }}
+
+    {% if is_incremental() %}
+        where service_date >= (
+            select coalesce(dateadd(day, -1, max(service_date)), '1900-01-01'::date)
+            from {{ this }}
+        )
+    {% endif %}
 
 ),
 

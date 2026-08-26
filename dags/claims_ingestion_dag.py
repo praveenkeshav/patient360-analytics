@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from io import StringIO
 import logging
+import os
+import tempfile
 
 import pandas as pd
 
@@ -48,9 +50,10 @@ CLAIM_TRANSACTIONS_PROCESSED_KEY = (
 
 default_args = {
     "retries": 2,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=5),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": timedelta(minutes=20),
 }
-
 
 # ---------------------------------------------------------
 # DAG
@@ -59,10 +62,21 @@ default_args = {
 with DAG(
     dag_id="claims_ingestion",
     start_date=datetime(2026, 8, 22),
-    schedule=None,
+    schedule="30 1 * * *",
     catchup=False,
+    max_active_runs=1,
+    dagrun_timeout=timedelta(minutes=90),
     default_args=default_args,
+    tags=["patient360", "claims", "production", "ingestion"],
+    doc_md="""
+    ## Patient 360 Claims Ingestion
+
+    Daily production ingestion for claims and claim transactions.
+    The DAG waits for both source files, validates/preprocesses them,
+    and loads the validated outputs into Snowflake RAW tables.
+    """,
     template_searchpath="/usr/local/airflow/include",
+
 ) as dag:
 
     # =====================================================
@@ -75,7 +89,8 @@ with DAG(
         bucket_key=CLAIMS_KEY,
         aws_conn_id="aws_patient360",
         poke_interval=30,
-        timeout=300,
+        timeout=1800,
+        deferrable=True,
     )
 
     wait_for_claim_transactions = S3KeySensor(
@@ -84,7 +99,8 @@ with DAG(
         bucket_key=CLAIM_TRANSACTIONS_KEY,
         aws_conn_id="aws_patient360",
         poke_interval=30,
-        timeout=300,
+        timeout=1800,
+        deferrable=True,
     )
 
     # =====================================================
@@ -154,88 +170,106 @@ with DAG(
             aws_conn_id="aws_patient360"
         )
 
-        input_file = "/tmp/claims_transactions.csv"
-        output_file = "/tmp/claims_transactions_processed.csv"
+        # Use an isolated temporary directory so retries/runs cannot
+        # collide with another worker process.
+        with tempfile.TemporaryDirectory(
+            prefix="patient360_claims_"
+        ) as temp_dir:
 
-        # Download from S3 to local worker storage.
-        s3.get_key(
-            key=CLAIM_TRANSACTIONS_KEY,
-            bucket_name=BUCKET,
-        ).download_file(input_file)
-
-        logger.info("Downloaded claim transactions file.")
-
-        seen_transaction_ids = set()
-        first_chunk = True
-        total_rows = 0
-
-        # Process the large CSV in chunks.
-        for transactions in pd.read_csv(
-            input_file,
-            chunksize=50000,
-        ):
-
-            # Preprocess.
-            transactions = preprocess_claim_transactions(
-                transactions
+            # Download source file from S3 to local worker storage.
+            input_file = s3.download_file(
+                key=CLAIM_TRANSACTIONS_KEY,
+                bucket_name=BUCKET,
+                local_path=temp_dir,
             )
 
-            # Check duplicate transaction IDs across chunks.
-            transaction_ids = set(
-                transactions["transaction_id"].dropna()
+            output_file = os.path.join(
+                temp_dir,
+                "claims_transactions_processed.csv",
             )
-
-            if seen_transaction_ids.intersection(transaction_ids):
-                raise ValueError(
-                    "Duplicate transaction_id found across chunks."
-                )
-
-            seen_transaction_ids.update(transaction_ids)
-
-            # Validate current chunk.
-            if not validate_claim_transactions(
-                transactions
-            ):
-                raise ValueError(
-                    "Claim transaction validation failed."
-                )
-
-            # Write processed chunk.
-            transactions.to_csv(
-                output_file,
-                mode="w" if first_chunk else "a",
-                header=first_chunk,
-                index=False,
-            )
-
-            first_chunk = False
-            total_rows += len(transactions)
 
             logger.info(
-                "Processed %s claim transactions so far.",
+                "Downloaded claim transactions file from s3://%s/%s",
+                BUCKET,
+                CLAIM_TRANSACTIONS_KEY,
+            )
+
+            seen_transaction_ids = set()
+            first_chunk = True
+            total_rows = 0
+
+            # Process the large CSV in chunks.
+            for transactions in pd.read_csv(
+                input_file,
+                chunksize=50000,
+            ):
+
+                # Preprocess current chunk.
+                transactions = preprocess_claim_transactions(
+                    transactions
+                )
+
+                # Check duplicate transaction IDs across chunks.
+                transaction_ids = set(
+                    transactions["transaction_id"].dropna()
+                )
+
+                if seen_transaction_ids.intersection(transaction_ids):
+                    raise ValueError(
+                        "Duplicate transaction_id found across chunks."
+                    )
+
+                seen_transaction_ids.update(transaction_ids)
+
+                # Validate current chunk.
+                if not validate_claim_transactions(
+                    transactions
+                ):
+                    raise ValueError(
+                        "Claim transaction validation failed."
+                    )
+
+                # Write validated chunk.
+                transactions.to_csv(
+                    output_file,
+                    mode="w" if first_chunk else "a",
+                    header=first_chunk,
+                    index=False,
+                )
+
+                first_chunk = False
+                total_rows += len(transactions)
+
+                logger.info(
+                    "Processed %s claim transactions so far.",
+                    total_rows,
+                )
+
+            if first_chunk:
+                raise ValueError(
+                    "Claim transactions source file is empty."
+                )
+
+            # Upload only after every chunk has passed validation.
+            s3.load_file(
+                filename=output_file,
+                key=CLAIM_TRANSACTIONS_PROCESSED_KEY,
+                bucket_name=BUCKET,
+                replace=True,
+            )
+
+            logger.info(
+                "Claim transactions processed: %s",
                 total_rows,
             )
 
-        # Upload processed file to S3.
-        s3.load_file(
-            filename=output_file,
-            key=CLAIM_TRANSACTIONS_PROCESSED_KEY,
-            bucket_name=BUCKET,
-            replace=True,
-        )
+            logger.info(
+                "Processed claim transactions output: s3://%s/%s",
+                BUCKET,
+                CLAIM_TRANSACTIONS_PROCESSED_KEY,
+            )
 
-        logger.info(
-            "Claim transactions processed: %s",
-            total_rows,
-        )
-
-        logger.info(
-            "Processed claim transactions output: s3://%s/%s",
-            BUCKET,
-            CLAIM_TRANSACTIONS_PROCESSED_KEY,
-        )
-
-        return total_rows
+            return total_rows
 
     # =====================================================
     # Create RAW load audit table
