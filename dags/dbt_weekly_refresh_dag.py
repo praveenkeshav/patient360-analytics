@@ -53,6 +53,7 @@ with DAG(
         group_id="dbt_weekly_refresh",
         project_config=ProjectConfig(
             dbt_project_path=DBT_PROJECT_PATH,
+            install_dbt_deps=False,
         ),
         profile_config=profile_config,
         render_config=RenderConfig(
@@ -64,7 +65,6 @@ with DAG(
             test_behavior=TestBehavior.AFTER_EACH,
         ),
         operator_args={
-            "install_deps": True,
             "full_refresh": True,
             "cancel_query_on_kill": True,
         },
