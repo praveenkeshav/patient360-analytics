@@ -174,3 +174,99 @@ The project uses a production-style engineering workflow for demonstration and l
 | BI automation | Power BI REST API |
 
 ---
+
+## 3. Source Data and Python Engineering
+
+### Source Data
+
+The project uses synthetic healthcare data generated with Synthea.
+
+The source datasets include:
+
+- Patients
+- Encounters
+- Conditions / diagnoses
+- Laboratory observations
+- Claims
+- Claim transactions
+- FHIR resources
+
+Both CSV-based datasets and FHIR/JSON clinical resources are used.
+
+### Source Profiling
+
+Before implementing the pipeline, the source data was profiled to understand:
+
+- Dataset structure and column definitions
+- Data types
+- Business identifiers
+- Entity relationships
+- Date fields
+- Nullability
+- Duplicate records
+- Referential integrity
+- Source-data limitations
+- Analytical grain
+
+This profiling informed the ingestion, validation, and downstream data-modeling decisions.
+
+### Python / Pandas Objective
+
+Python is used as the source-data engineering and validation layer.
+
+The primary objective is to prepare heterogeneous healthcare source data for reliable downstream ingestion while applying validation rules before data reaches the warehouse.
+
+The Python implementation includes:
+
+- Data-type normalization
+- Date parsing and standardization
+- Column-name standardization
+- Source-data preparation
+- Derived analytical fields
+- Referential validation
+- Clinical data validation
+- Laboratory data processing
+- FHIR/JSON resource processing
+
+Processing logic is separated from validation logic so that validation functions can be independently tested.
+
+### FHIR / Clinical Data Processing
+
+FHIR/JSON resources are converted into analytical structures where required.
+
+For laboratory observations, the processing flow is:
+
+```text
+FHIR / JSON
+    |
+    v
+Resource Parsing
+    |
+    v
+Observation Extraction
+    |
+    v
+Reference Range Processing
+    |
+    v
+Abnormality Classification
+    |
+    v
+Processed Analytical Data
+```
+
+### Python Automated Testing
+
+pytest is used to test the implemented Python validation components.
+
+Validation includes rules for:
+
+- Required identifiers
+- Valid dates
+- Patient references
+- Encounter references
+- Identifier relationships
+- Clinical data
+- Laboratory data
+
+---
